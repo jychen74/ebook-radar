@@ -2,6 +2,7 @@ import os
 import re
 import xml.etree.ElementTree as ET
 import urllib.request
+import urllib.parse
 from datetime import datetime
 
 def fetch_eslite_rank():
@@ -18,18 +19,17 @@ def fetch_eslite_rank():
         
         for i, item in enumerate(items[:10]):
             raw_title = item.find('title').text or "熱門繁中選書"
-            raw_link = item.find('link').text or ""
+            link_node = item.find('link')
+            raw_link = link_node.text.strip() if (link_node is not None and link_node.text) else ""
             raw_desc = item.find('description').text or "暫無書籍簡介。"
             
-            # 清洗數據
             title = re.sub(r'^第\d+名\s*:\s*', '', raw_title)
             desc = re.sub(r'<[^>]*>', '', raw_desc)[:100] + "..."
             
-            # 【關鍵修正】確保誠品連結在任何環境下都能精確還原並點擊
-            if "eslite.com" not in raw_link:
+            if "eslite.com" not in raw_link or len(raw_link) < 20:
                 link = "https://www.eslite.com"
             else:
-                link = raw_link.strip()
+                link = raw_link
             
             book_list.append({
                 "rank": i + 1,
@@ -50,12 +50,18 @@ def fetch_eslite_rank():
     return book_list
 
 def fetch_foreign_rank():
-    """抓取外文指標數據"""
-    return [
-        {"rank": 1, "platform": "Kindle Global", "title": "An Elegant Puzzle: Systems of Engineering Management", "description": "A structured approach to engineering puzzles and organizational design.", "link": "https://books.google.com"},
-        {"rank": 2, "platform": "Amazon Science", "title": "Gödel, Escher, Bach: An Eternal Golden Braid", "description": "A profound exploration of cognition and formal systems.", "link": "https://books.google.com"},
-        {"rank": 3, "platform": "Tech Best-Seller", "title": "Designing Data-Intensive Applications", "description": "The definitive guide to data system architectures.", "link": "https://books.google.com"}
+    """抓取外文指標數據，並動態組裝直達 Google Books 該書專屬頁面的搜尋連結"""
+    raw_data = [
+        {"rank": 1, "platform": "Kindle Global", "title": "An Elegant Puzzle: Systems of Engineering Management", "description": "A structured approach to engineering puzzles and organizational design."},
+        {"rank": 2, "platform": "Amazon Science", "title": "Gödel, Escher, Bach: An Eternal Golden Braid", "description": "A profound exploration of cognition and formal systems."},
+        {"rank": 3, "platform": "Tech Best-Seller", "title": "Designing Data-Intensive Applications", "description": "The definitive guide to data system architectures."}
     ]
+    
+    for b in raw_data:
+        search_query = urllib.parse.quote(b["title"])
+        b["link"] = f"https://www.google.com/search?tbm=bks&q={search_query}"
+        
+    return raw_data
 
 def generate_html(books, current_type):
     date_str = datetime.now().strftime("%Y/%m/%d")
@@ -83,7 +89,7 @@ def generate_html(books, current_type):
 </style>
 </head>
 <body>
-<h1 style="font-size: 18pt; text-align: center; border: 2px solid #000000; background-color: #e0e0e0; padding: 6px; margin: 0 0 15px 0;">每週跨平台電子書雷達 (阿部寬風)</h1>
+<h1 style="font-size: 18pt; text-align: center; border: 2px solid #000000; background-color: #e0e0e0; padding: 6px; margin: 0 0 15px 0;">每週跨平台電子書雷達</h1>
 <table width="100%" border="0" style="border: none;">
   <tr style="border: none;">
     <td width="22%" valign="top" style="border: none; border-right: 2px double #000000; background-color: #f9f9f9; padding-right: 12px;">
@@ -109,7 +115,6 @@ def generate_html(books, current_type):
         </tr>"""
         
     for b in books:
-        # 【安全性修正】將網址提取出來單獨處理，徹底預防引號嵌套造成的 HTML 語法崩潰
         target_url = b['link']
         html += f"""
         <tr>
