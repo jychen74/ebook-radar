@@ -2,7 +2,6 @@ import os
 import re
 import xml.etree.ElementTree as ET
 import urllib.request
-import urllib.parse
 from datetime import datetime
 
 def fetch_eslite_rank():
@@ -39,39 +38,19 @@ def fetch_eslite_rank():
                 "link": link
             })
     except Exception as e:
-        print(f"真實抓取失敗，啟動核心文獻備援方案: {e}")
-        backup = [
-            {"title": "底層邏輯", "platform": "Kobo/Readmoo 雙冠", "desc": "解析事物背後的核心運作邏輯與思考框架。", "link": "https://play.google.com/store/books?hl=zh-TW"},
-            {"title": "原子習慣", "platform": "博客來/Kindle 熱銷", "desc": "系統化習慣養成的終極聖經，透過微小行為設計動態調整系統常態。", "link": "https://play.google.com/store/books?hl=zh-TW"},
-            {"title": "系統思考", "platform": "跨平台專題選書", "desc": "結構化思維建立的奠基之作，教你如何穿透表面混亂看清動態結構。", "link": "https://play.google.com/store/books?hl=zh-TW"}
-        ]
-        for i, b in enumerate(backup):
-            book_list.append({"rank": i + 1, "platform": b["platform"], "title": b["title"], "description": b["desc"], "link": b["link"]})
+        # 核心修正：徹底移除欺騙性的假書單備援，抓取失敗時直接回傳錯誤狀態，不唬爛
+        print(f"真實抓取失敗: {e}")
+        book_list.append({
+            "rank": "!",
+            "platform": "系統異常",
+            "title": "系統當前無法取得即時數據",
+            "description": f"原因：遠端伺服器回應異常或網路連線中斷 ({str(e)})。請稍後重試，系統拒絕提供預設虛假資料。",
+            "link": "#"
+        })
     return book_list
 
-def fetch_foreign_rank():
-    """抓取外文指標數據，並動態組裝直達 Google Books 該書專屬頁面的搜尋連結"""
-    raw_data = [
-        {"rank": 1, "platform": "Kindle Global", "title": "An Elegant Puzzle: Systems of Engineering Management", "description": "A structured approach to engineering puzzles and organizational design."},
-        {"rank": 2, "platform": "Amazon Science", "title": "Gödel, Escher, Bach: An Eternal Golden Braid", "description": "A profound exploration of cognition and formal systems."},
-        {"rank": 3, "platform": "Tech Best-Seller", "title": "Designing Data-Intensive Applications", "description": "The definitive guide to data system architectures."}
-    ]
-    
-    for b in raw_data:
-        search_query = urllib.parse.quote(b["title"])
-        b["link"] = f"https://www.google.com/search?tbm=bks&q={search_query}"
-        
-    return raw_data
-
-def generate_html(books, current_type):
+def generate_html(books):
     date_str = datetime.now().strftime("%Y/%m/%d")
-    tab_title = "本週繁體中文熱門暢銷榜 (Top 10)" if current_type == "zh" else "當季熱門外文/英文電子書推薦 (Top 10)"
-    
-    zh_active = ' style="background-color: #ffffcc; font-weight: bold; border: 1px dashed #ff0000; padding: 2px;"' if current_type == "zh" else ''
-    en_active = ' style="background-color: #ffffcc; font-weight: bold; border: 1px dashed #ff0000; padding: 2px;"' if current_type == "en" else ''
-    
-    zh_link = "./index.html"
-    en_link = "./en.html"
     
     html = f"""<!DOCTYPE html>
 <html lang="zh-TW">
@@ -93,11 +72,9 @@ def generate_html(books, current_type):
 <table width="100%" border="0" style="border: none;">
   <tr style="border: none;">
     <td width="22%" valign="top" style="border: none; border-right: 2px double #000000; background-color: #f9f9f9; padding-right: 12px;">
-      <b style="color: #cc0000; font-size: 11pt;">📚 數據源切換選單</b><br><br>
-      <span{zh_active}><a href="{zh_link}">→ 繁體中文暢銷榜</a></span><br>
-      <font size="1" color="#666666">(整合：誠品官方數據、備援書單)</font><br><br>
-      <span{en_active}><a href="{en_link}">→ 英文/外文熱門榜</a></span><br>
-      <font size="1" color="#666666">(整合：全球指標平台)</font><br><br>
+      <b style="color: #cc0000; font-size: 11pt;">📚 數據源選單</b><br><br>
+      <span style="background-color: #ffffcc; font-weight: bold; border: 1px dashed #ff0000; padding: 2px;"><a href="./index.html">→ 繁體中文暢銷榜</a></span><br>
+      <font size="1" color="#666666">(數據來源：誠品官方實時榜單)</font><br><br>
       <hr style="border: none; border-top: 1px dashed #000000;">
       <b style="color: #000000; font-size: 10pt;">📊 核心聚合指標說明</b><br>
       <font size="2" color="#444444">排除演算法噪音與行銷業配，100% 依據物理銷售留存與核心文獻引用進行動態加權。</font><br><br>
@@ -105,17 +82,16 @@ def generate_html(books, current_type):
       <font size="1">資料刷新時間：<br><b>{date_str}</b></font>
     </td>
     <td width="78%" valign="top" style="border: none; padding-left: 15px;">
-      <font size="4" color="#000088"><b>{tab_title}</b></font><br><br>
+      <font size="4" color="#000088"><b>本週繁體中文熱門暢銷榜 (Top 10)</b></font><br><br>
       <table width="100%">
         <tr>
           <th width="8%" align="center">名次</th>
           <th width="18%">指標平台</th>
           <th width="54%">書籍指標與內容摘要</th>
-          <th width="20%">傳送門</th>
+          <th width="20%">狀態備註</th>
         </tr>"""
         
     for b in books:
-        target_url = b['link']
         html += f"""
         <tr>
           <td align="center" bgcolor="#f5f5f5"><b>{b['rank']}</b></td>
@@ -125,7 +101,7 @@ def generate_html(books, current_type):
             <p style="font-size: 9pt; color: #444444; margin: 5px 0 0 0; text-align: justify; line-height: 1.3;">{b['description']}</p>
           </td>
           <td>
-            <a href="{target_url}" target="_blank">[連結]</a>
+            <font size="2" color="#666666">當期收錄</font>
           </td>
         </tr>"""
         
@@ -141,9 +117,5 @@ def generate_html(books, current_type):
 if __name__ == "__main__":
     zh_books = fetch_eslite_rank()
     with open("index.html", "w", encoding="utf-8") as f:
-        f.write(generate_html(zh_books, "zh"))
-        
-    en_books = fetch_foreign_rank()
-    with open("en.html", "w", encoding="utf-8") as f:
-        f.write(generate_html(en_books, "en"))
+        f.write(generate_html(zh_books))
     print("網頁更新完成。")
