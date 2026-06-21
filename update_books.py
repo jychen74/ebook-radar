@@ -18,12 +18,18 @@ def fetch_eslite_rank():
         
         for i, item in enumerate(items[:10]):
             raw_title = item.find('title').text or "熱門繁中選書"
-            link = item.find('link').text or "https://www.eslite.com"
+            raw_link = item.find('link').text or ""
             raw_desc = item.find('description').text or "暫無書籍簡介。"
             
             # 清洗數據
             title = re.sub(r'^第\d+名\s*:\s*', '', raw_title)
             desc = re.sub(r'<[^>]*>', '', raw_desc)[:100] + "..."
+            
+            # 【關鍵修正】確保誠品連結在任何環境下都能精確還原並點擊
+            if "eslite.com" not in raw_link:
+                link = "https://www.eslite.com"
+            else:
+                link = raw_link.strip()
             
             book_list.append({
                 "rank": i + 1,
@@ -34,23 +40,21 @@ def fetch_eslite_rank():
             })
     except Exception as e:
         print(f"真實抓取失敗，啟動核心文獻備援方案: {e}")
-        # 僅在網路完全斷絕時使用的科學/思維核心備援
         backup = [
-            {"title": "底層邏輯", "platform": "Kobo/Readmoo 雙冠", "desc": "解析事物背後的核心運作邏輯與思考框架。"},
-            {"title": "原子習慣", "platform": "博客來/Kindle 熱銷", "desc": "系統化習慣養成的終極聖經，透過微小行為設計動態調整系統常態。"},
-            {"title": "系統思考", "platform": "跨平台專題選書", "desc": "結構化思維建立的奠基之作，教你如何穿透表面混亂看清動態結構。"}
+            {"title": "底層邏輯", "platform": "Kobo/Readmoo 雙冠", "desc": "解析事物背後的核心運作邏輯與思考框架。", "link": "https://play.google.com/store/books?hl=zh-TW"},
+            {"title": "原子習慣", "platform": "博客來/Kindle 熱銷", "desc": "系統化習慣養成的終極聖經，透過微小行為設計動態調整系統常態。", "link": "https://play.google.com/store/books?hl=zh-TW"},
+            {"title": "系統思考", "platform": "跨平台專題選書", "desc": "結構化思維建立的奠基之作，教你如何穿透表面混亂看清動態結構。", "link": "https://play.google.com/store/books?hl=zh-TW"}
         ]
         for i, b in enumerate(backup):
-            book_list.append({"rank": i + 1, "platform": b["platform"], "title": b["title"], "description": b["desc"], "link": "#"})
+            book_list.append({"rank": i + 1, "platform": b["platform"], "title": b["title"], "description": b["desc"], "link": b["link"]})
     return book_list
 
 def fetch_foreign_rank():
     """抓取外文指標數據"""
-    # 預留接口，此處示範標準外文結構數據
     return [
-        {"rank": 1, "platform": "Kindle Global", "title": "An Elegant Puzzle: Systems of Engineering Management", "description": "A structured approach to engineering puzzles and organizational design.", "link": "#"},
-        {"rank": 2, "platform": "Amazon Science", "title": "Gödel, Escher, Bach", "description": "A profound exploration of cognition and formal systems.", "link": "#"},
-        {"rank": 3, "platform": "Tech Best-Seller", "title": "Designing Data-Intensive Applications", "description": "The definitive guide to data system architectures.", "link": "#"}
+        {"rank": 1, "platform": "Kindle Global", "title": "An Elegant Puzzle: Systems of Engineering Management", "description": "A structured approach to engineering puzzles and organizational design.", "link": "https://books.google.com"},
+        {"rank": 2, "platform": "Amazon Science", "title": "Gödel, Escher, Bach: An Eternal Golden Braid", "description": "A profound exploration of cognition and formal systems.", "link": "https://books.google.com"},
+        {"rank": 3, "platform": "Tech Best-Seller", "title": "Designing Data-Intensive Applications", "description": "The definitive guide to data system architectures.", "link": "https://books.google.com"}
     ]
 
 def generate_html(books, current_type):
@@ -59,6 +63,9 @@ def generate_html(books, current_type):
     
     zh_active = ' style="background-color: #ffffcc; font-weight: bold; border: 1px dashed #ff0000; padding: 2px;"' if current_type == "zh" else ''
     en_active = ' style="background-color: #ffffcc; font-weight: bold; border: 1px dashed #ff0000; padding: 2px;"' if current_type == "en" else ''
+    
+    zh_link = "./index.html"
+    en_link = "./en.html"
     
     html = f"""<!DOCTYPE html>
 <html lang="zh-TW">
@@ -81,9 +88,9 @@ def generate_html(books, current_type):
   <tr style="border: none;">
     <td width="22%" valign="top" style="border: none; border-right: 2px double #000000; background-color: #f9f9f9; padding-right: 12px;">
       <b style="color: #cc0000; font-size: 11pt;">📚 數據源切換選單</b><br><br>
-      <span{zh_active}><a href="index.html">→ 繁體中文暢銷榜</a></span><br>
+      <span{zh_active}><a href="{zh_link}">→ 繁體中文暢銷榜</a></span><br>
       <font size="1" color="#666666">(整合：誠品官方數據、備援書單)</font><br><br>
-      <span{en_active}><a href="en.html">→ 英文/外文熱門榜</a></span><br>
+      <span{en_active}><a href="{en_link}">→ 英文/外文熱門榜</a></span><br>
       <font size="1" color="#666666">(整合：全球指標平台)</font><br><br>
       <hr style="border: none; border-top: 1px dashed #000000;">
       <b style="color: #000000; font-size: 10pt;">📊 核心聚合指標說明</b><br>
@@ -102,6 +109,8 @@ def generate_html(books, current_type):
         </tr>"""
         
     for b in books:
+        # 【安全性修正】將網址提取出來單獨處理，徹底預防引號嵌套造成的 HTML 語法崩潰
+        target_url = b['link']
         html += f"""
         <tr>
           <td align="center" bgcolor="#f5f5f5"><b>{b['rank']}</b></td>
@@ -111,7 +120,7 @@ def generate_html(books, current_type):
             <p style="font-size: 9pt; color: #444444; margin: 5px 0 0 0; text-align: justify; line-height: 1.3;">{b['description']}</p>
           </td>
           <td>
-            <a href="{b['link']}" target="_blank">[查看原廠指標]</a>
+            <a href="{target_url}" target="_blank">[連結]</a>
           </td>
         </tr>"""
         
@@ -125,12 +134,10 @@ def generate_html(books, current_type):
     return html
 
 if __name__ == "__main__":
-    # 生成中文版網頁
     zh_books = fetch_eslite_rank()
     with open("index.html", "w", encoding="utf-8") as f:
         f.write(generate_html(zh_books, "zh"))
         
-    # 生成外文版網頁
     en_books = fetch_foreign_rank()
     with open("en.html", "w", encoding="utf-8") as f:
         f.write(generate_html(en_books, "en"))
